@@ -56,7 +56,12 @@ public class WishListService {
 
     public WishlistResponseDTO getWishlist(Long userId) {
         Wishlist wishlist = wishlistRepository.findByUserId(userId)
-                        .orElseThrow(() -> new WishListNotFound("Wishlist not found"));
+                        .orElse(
+                                Wishlist.builder()
+                                        .userId(userId)
+                                        .productIds(new ArrayList<>())
+                                        .build()
+                        );
 
         return mapToDTO(wishlist);
     }
@@ -77,11 +82,20 @@ public class WishListService {
     }
 
     public WishlistResponseDTO mapToDTO(Wishlist wishlist) {
-        List<ProductResponseDTO> products =
-                wishlist.getProductIds()
-                        .stream()
-                        .map(productServiceClient::getProductById)
-                        .toList();
+        List<ProductResponseDTO> products = new ArrayList<>();
+        if (wishlist.getProductIds() != null) {
+            for (String productId : wishlist.getProductIds()) {
+                try {
+                    ProductResponseDTO product = productServiceClient.getProductById(productId);
+                    if (product != null) {
+                        products.add(product);
+                    }
+                } catch (Exception e) {
+                    org.slf4j.LoggerFactory.getLogger(WishListService.class)
+                            .warn("Product with ID {} could not be fetched or has been deleted from product-service: {}", productId, e.getMessage());
+                }
+            }
+        }
 
         return WishlistResponseDTO.builder().userId(wishlist.getUserId())
                 .products(products)
